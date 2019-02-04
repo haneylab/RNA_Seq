@@ -13,5 +13,5 @@ code. Type into the console:
 if (!requireNamespace("BiocManager"))
     install.packages("BiocManager")
 BiocManager::install()
-BiocManager::install(c("DESeq2", "pheatmap", "ashr"
+BiocManager::install(c("DESeq2", "pheatmap", "ashr"))
 ```
