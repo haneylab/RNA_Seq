@@ -6,6 +6,8 @@ Please download:
 * [RStudio](https://www.rstudio.com/products/rstudio/download/) (Desktop version)
 * Files – from OwnCloud in the `Data_Andrew/` directory
 
+It is helpful if you download the workshop_files into a new folder dedicated to this workshop.  
+
 ## R Packages
 Open RStudio and try to get familiar with the layout. By default, on the left side is a console. This is where you can type
 code. Type into the console:
