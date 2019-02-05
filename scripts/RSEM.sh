@@ -8,10 +8,10 @@ export rna_home=#Location of RNA-Seq files
 
 
 #Prepare RSEM reference
-#rsem-prepare-reference \
-#--bowtie2 \
-#$rna_home/ref/ \
-#$rna_home/ref/A_thal 
+rsem-prepare-reference \
+--bowtie2 \
+$rna_home/ref/ \
+$rna_home/ref/A_thal 
 
 
 #echo Prepare reference done
