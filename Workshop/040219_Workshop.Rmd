@@ -1,0 +1,122 @@
+---
+title: "Differential Expression Analysis of Arabidopsis thaliana *hsm13*"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r Loading packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tximport)
+library(DESeq2)
+library(ashr)
+```
+##Validation of TPM data
+```{r counts_hist definition, eval=FALSE, message=FALSE, echo=FALSE}
+hsm_L1 <- read_tsv("data/hsm-L1.isoforms.results")
+hsm_L2 <- read_tsv("data/hsm-L2.isoforms.results")
+
+
+counts_hist <- function(file1, file2){ #files 1 and 2 are counts matrices that contain a column called "TPM"
+  tpm1 <- file1$TPM
+  tpm2 <- file2$TPM
+  f1_lc <- density(log(tpm1)) #contains log transformed counts values for file1
+  f2_lc <- density(log(tpm2)) #contains log transformed counts values for file2
+  plot(f1_lc$x, f1_lc$y*length(tpm1),
+       type="l",
+       main="TPM Distribution",
+       xlab="log10(TPM)",
+       ylab="Number of Transcripts")
+  lines(f2_lc$x, f2_lc$y*length(tpm2), col="red")
+}
+counts_hist(hsm_L1, hsm_L2)
+```
+
+All of the TPM distributions were very similar between samples, so I decided to proceed with DEG analysis using the DESeq2 package. 
+
+##Differential expression analysis
+
+```{r Tabular data import and validation of file paths, eval=FALSE, message=FALSE, results='hide'}
+samples <- read_tsv("samples.txt")
+tx2gene <- read_csv("A_thal.tx2gene.csv")
+dir <- "/Users/andrew/compbio/2019/220119_HSM_RNASeq/data/"
+files <- file.path(dir, paste0(samples$sample_id, ".isoforms.results"))
+names(files) <- samples$sample_id
+all(file.exists(files))
+txi.rsem <- tximport(files, type = "rsem", tx2gene = tx2gene, txIn = TRUE, txOut = FALSE)
+```
+
+```{r Differential expression analysis with DESeq2, eval=FALSE}
+dds <- DESeqDataSetFromTximport(txi.rsem, colData = samples, design = ~ Genotype + Treatment + Genotype:Treatment)
+keep <- rowSums(counts(dds)) >= 10 #pre-filtering of large object to speed up DE analysis
+dds <- dds[keep,]
+dds$Genotype <- relevel(dds$Genotype, "WT")
+dds <- DESeq(dds)
+resultsNames(dds)
+```
+
+##Data quality assessment
+```{r, eval=FALSE}
+rld <- rlog(dds, blind = FALSE)
+ntd <- normTransform(dds)
+library(vsn)
+meanSdPlot(assay(rld))
+meanSdPlot(assay(ntd))
+```
+###Heatmap
+```{r, eval=FALSE}
+library(pheatmap)
+select <- order(rowMeans(counts(dds, normalized=TRUE)), decreasing = TRUE)[1:20]
+df <- as.data.frame(colData(dds)[,c("Genotype", "Treatment")])
+pheatmap(assay(rld)[select,], cluster_rows = FALSE, show_rownames = FALSE, cluster_cols = FALSE, annotation = df)
+```
+###Distance Matrix
+```{r, eval=FALSE}
+library(RColorBrewer)
+sampleDists <- dist(t(assay(ntd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(ntd$Genotype, ntd$Treatment, sep = "_")
+colnames(sampleDistMatrix) <- NULL
+colours <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+pheatmap(sampleDistMatrix, clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists, col=colours)
+```
+###PCA
+```{r, eval=FALSE}
+plotPCA(ntd, intgroup=c("Genotype", "Treatment"))
+```
+##Results and Analysis
+Since the experimental design is quite complicated we want to pull out DEGs for 4 different comparisons:
+
+* hsm_L vs. WT_L
+* hsm_R365 vs. hsm_RCT 
+* hsm_RCT vs. WT_RCT
+* WT_R365 vs. WT_RCT
+
+
+```{r Producing results objects, eval=FALSE}
+#hsm13 leaf vs wt leaf
+res_1 <- lfcShrink(dds, contrast=list(c("Genotype_hsm13_vs_WT","Genotypehsm13.TreatmentLeaf")), type="ashr")
+#hsm13 roots with WCS365 vs buffer
+res_2 <- lfcShrink(dds, contrast=list(c("Treatment_WCS365_vs_Buffer", "Genotypehsm13.TreatmentWCS365")), type = "ashr")
+#hsm13 roots with buffer vs wt roots with buffer
+res_3 <- lfcShrink(dds, "Genotype_hsm13_vs_WT", type = "ashr")
+#wt roots with WCS365 vs bufffer
+res_4 <- lfcShrink(dds, "Treatment_WCS365_vs_Buffer", type = "ashr")
+#hsm13 roots with WCS365 vs wt roots with WCS365
+res_5 <- lfcShrink(dds, contrast=list("Genotype_hsm13_vs_WT", "Treatment_WCS365_vs_Buffer"), type="ashr")
+
+```
+
+##MA plots
+```{r MA plots}
+p1 <- plotMA(res_1, ylim=c(-2,2), main="hsm13-leaf vs. WT-leaf")
+```
+
+```{r Data export}
+res_1F <- subset(res_1, padj < 0.1)
+
+write.csv(as.data.frame(res_1F), "DE_tables/hsm_leaf_vs_wt_leaf.csv")
+```
+
+
